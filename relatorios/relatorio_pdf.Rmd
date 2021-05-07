@@ -1,0 +1,368 @@
+---
+title: "Trabalho Computacional - Teoria da Decisão - UFMG"
+author: "Pedro Loes"
+date: "27/02/2021"
+output: pdf_document
+---
+
+
+## Resumo
+
+* _Este artigo apresenta uma solução para um problema aplicado do curso de _Teoria da Decisão_ do departamento de __Engenharia de Sistemas__ da __UFMG__ ministrado pelo professor _Lucas Batista_. O objetivo deste trabalho foi aplicar as técnicas de __otimização__ e __teoria da decisão__ lecionadas ao longo do semestre. O desenvolvimento compreende a exploração de __mínimos locais__ e __mínimos globais__. A conclusão visou __otimizar__ o número de __pontos de acesso__ para suprir os __consumos de banda__ demandados pelos clientes de uma conferência, atendendo à __restrições pré-estabelecidas__. Finalmente na etapa __otimizador em produção__ foi criado um aplicativo para generalizar o uso do algoritimo_.
+
+## Introdução
+
+*  O problema foi modelado no software __R__ com implementação da função objetivo em __C++__ .
+*  Diferentes espaços de busca foram considerados com o intuito de descobrir a partir de qual densidade de espaço de busca __discretizado__ o algoritmo convergiria para a solução de __mínimo global ótima__.
+
+## Especificações do Problema
+
+* Deseja-se instalar uma rede __WLAN__ do tipo __N 2D__ para atendimento de um centro de convenções com __800 × 800 metros__. Para planejamento dessa rede foram estimados __500__ pontos de demanda, com suas respectivas __posições__ geográficas e __consumos__ de largura de __banda__. O arquivo __clientes.csv__ contém:
+  * Coordenada __x__ do cliente em metros.
+  * Coordenada __y__ do cliente em metros.
+  * Consumo de banda do cliente em __Mbps__.
+  
+* Amostra das __10__ primeiras observações:
+  
+```{r warning=F, message=F, error=F, echo=F}
+
+# Carrega Pacotes
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(Rcpp)
+library(knitr)
+library(png)
+library(grid)
+
+# Importa dados
+wlan <- read_csv("https://raw.githubusercontent.com/Protospi/WLAN/main/dados/clientes.csv",
+                 col_names = c("x", "y", "Mbps")) %>%
+                 mutate(Id = 1:500) %>%
+                 relocate(Id, .before = x)
+
+# 5 primeiras observacoes da tabela
+kable(head(wlan,10))
+
+```
+
+* Variáveis de Decisão:
+  + Coordenadas dos pontos a serem instalados na área de __800 x 800 metros__.
+  + Ponto de Acesso que será responsável pelo atendimento de cada cliente.
+  
+* Restrições:
+  + Ao menos __95%__ dos pontos de demanda devem ter suas demandas integralmente atendidas.
+  + Cada ponto de acesso a ser instalado tem capacidade de __150Mbps__, que não pode ser excedida.
+  + Um cliente pode ser atendido por um __Pa__ se a distância entre ambos é inferior a __85 metros__.
+  + Cada cliente só pode ser atendido por um único __Pa__.
+  + Devido a restrições orçamentárias, podem ser instalados no máximo __100 Pa's__.
+  
+* Simplificações:
+  + Os pontos de demanda e seus __consumos__ de banda são __estáticos__.
+  + O efeito de __obstáculos__ no ambiente foram __desprezados__.
+  + Um ponto de acesso __não__ causa __interferência__ em outros.
+  
+## Modelagem
+
+* Definição de Variáveis:
+  +  $Pd_i \hspace{0.2cm} \leftarrow$  Pontos de Demanda $i = \{1, 2, 3, ..., 500\}$, $Pd_i \in$ $R\{x, y\}$, x, y = $\{1, ..., 800\}$
+  +  $Pa_j \hspace{0.16cm} \leftarrow$ Pontos de Acesso $j = \{1, 2, ..., 100\}$, $Pa_j \in$ $R\{x, y\}$, x, y = $\{1, ..., 800\}$
+  +  $\beta_i \hspace{0.43cm} \leftarrow$  Consumo de banda em Mbps dos Pd's, $\forall \hspace{0.1cm} i \in Pd_i \hspace{0.1cm}$
+  +  $d_{i,j} \hspace{0.22cm} \leftarrow$  Distância Euclidiana entre $Pd_i$ e $Pa_j$, $\forall \hspace{0.1cm} i \in Pd_i \hspace{0.1cm}$, $\forall \hspace{0.1cm} j \in Pa_j$
+  +  $\alpha_j \hspace{0.38cm} \leftarrow$  Ativação do $Pa_j$, $\alpha_j$ $\in \{0,1\}$ $\forall \hspace{0.1cm} j \in Pa_j$
+  +  $\eta_{i,j} \hspace{0.24cm} \leftarrow$  Atendimento do $Pd_i$ pelo $Pa_j$, $\eta_{i,j}$ $\in \{0,1\}$ $\forall \hspace{0.1cm} i \in Pd_i \hspace{0.1cm}$, $\forall \hspace{0.1cm} j \in Pa_j$
+  
+<br>
+
+* Definição da Função:
+  +  min  $(\sum_{j=1}^{|P_a|} \hspace{0.1cm} \alpha_j)$
+  
+  
+<br>
+  
+* Definição das Restrições:
+  +  $\sum_{i=1}^{|P_d|}\hspace{0.1cm} \sum_{j=1}^{|P_a|} \hspace{0.1cm} \eta_{i,j} \hspace{0.1cm} \geq \hspace{0.1cm} 475$
+  +  $\sum_{i=1}^{|P_d|} \hspace{0.1cm} \eta_{i,j} \hspace{0.1cm}  \times \hspace{0.1cm} \beta_i \hspace{0.1cm} \le \hspace{0.1cm} 150 \hspace{0.3cm} \forall \hspace{0.1cm} j \in \alpha_j=1$
+  +  $\sum_{j=1}^{|Pa|} \hspace{0.1cm} \eta_{i,j} \hspace{0.1cm} \le \hspace{0.1cm} 1 \hspace{0.3cm} \forall \hspace{0.1cm} i \in Pd$
+  +  $\sum_{j=1}^{|Pa|} \hspace{0.1cm} \alpha_j \hspace{0.1cm} \le \hspace{0.1cm} 100$
+  +  $\exists \hspace{0.1cm} \eta_{i,j} \hspace{0.1cm} \forall \hspace{0.1cm} d_{i,j} \hspace{0.1cm} \le \hspace{0.1cm} 85$
+ 
+
+## Análise Exploratória
+
+
+*  Para ilustrar uma visão inicial da distribuição dos clientes no espaço de 800 x 800 foi elaborado um gráfico de dispersão 2d com os dados da localização __(x, y)__ dos pontos de demanda.
+
+*  O parâmetro __alpha__ de transparência foi alterado para __0.5__ com o intuito de eliminar o problema da sobreposição de __Pd's__ e facilitar a compreensão da densidade destes pontos.
+
+*  A dimensão de cor foi adicionada considerando o gradiente das cores preta até azul para o consumo de largura de banda requisitada em __Mbps__ por cada cliente.
+
+```{r fig.align='center', echo = FALSE, out.width="100%"}
+
+# Le imagem
+img <- readPNG("../imagens/dispersao.png")
+
+# Imprime imagem
+grid.raster(img)
+
+```
+
+
+*  Existem __2__ grandes clusters na dispersão da localização dos clientes em torno dos pontos __(200, 200)__ e __(600, 600)__. Os demais pontos apresentam distribuição esparsa na área de __800 x 800__ metros.
+
+*  Na diagonal que vai de __(0,0)__ até __(800,800)__ os pontos de demanda são menos espalhados mas na diagonal __(0,800)__ até __(800,0)__ os pontos estão mais dispersos.
+
+*  Parece não existir padrão visual para a distribuição das demandas de banda em __Mbps__.
+
+## Espaços de Busca 
+
+*  Se considerada uma escala continua, a área de __800 x 800__ metros possuí infinitas coordenadas de possíveis localizações para os pontos de acesso.
+
+*  A construção de espaços de busca considerou espaços discretizados na forma de matrizes do tipo $\boldsymbol M_{ \boldsymbol ( \boldsymbol i, \boldsymbol j \boldsymbol )}$ com __i = {8, 9, ..., 150}__ e __j = {8, 9, ..., 150}__. A posição __i__ representa a quantidade de posições igualmente espaçadas no eixo __x__ e da mesma forma, a posição __j__ no eixo __y__.
+
+```{r fig.align='center', echo = FALSE, out.width="100%"}
+
+# Le imagem
+img <- readPNG("../imagens/espacos_discretos_8x8_150x150.png")
+
+# Imprime imagem
+grid.raster(img)
+
+```
+
+
+*  O __1º__ gráfico no canto __superior esquerdo__ ilustra a área discreta de __800 x 800__ em __8__ posições igualmente espaçadas para o eixo __x__ e __y__ totalizando __64__ possíveis localizações para os pontos de acesso.
+
+*  Os gráficos __fora da diagonal principal__ ilustram alguns dos espaços discretos irregulares arbitrariamente escolhidos, ou seja, com um número de possíveis posições diferente para os eixos __x__ e __y__.
+
+*  Os gráficos __na diagonal principal__ ilustram alguns dos espaços discretos regulares, ou seja, com a mesma escala de números discretos para os eixos __x__ e __y__. Por serem igualmente espaçados, apresentam o mesmo número de possíveis posições para os eixos __x__ e __y__.
+
+*  O __último gráfico__ no canto inferior direito ilustra a área discreta de __800 x 800__ em __150__ posições igualmente espaçadas para o eixo __x__ e __y__ totalizando __22500__ possíveis localizações para os pontos de acesso.
+
+
+## Prototipagem do Algoritmo 
+
+* Testes exploratórios:
+  + Espaços discretos menos granulares que $\boldsymbol M_{\boldsymbol ( \boldsymbol 8, \boldsymbol 8 \boldsymbol )}$ não apresentam solução. 
+  + Espaços discretos mais granulares que $\boldsymbol M_{ \boldsymbol ( \boldsymbol 1 \boldsymbol 5 \boldsymbol 0, \boldsymbol 1 \boldsymbol 5 \boldsymbol 0 \boldsymbol )}$ apresentam convergência estável. 
+  + O custo computacional para executar o algoritmo em __R__ foi na unidade de __dias__.
+  
+* Os laços para inspecionar o melhor posicionamento dos pontos de acesso em cada espaços de busca foram prototipados em __C++__.
+
+* A importação dos dados, a declaração de objetos e a construção dos espaços de busca foram prototipados no ambiente __R__.
+
+### Prototipagem do modulo Rastreador em C++
+
+```{Rcpp eval = F}
+
+// Função para calcular o quadrado de um número
+double enquadra(double x){
+  double quadrado = x * x;
+  return quadrado;
+}
+
+// Função para contar o nº de Pd's cobertos pelo raio de um Pa
+std::vector<double> conta_pontos(x, y, wlanx, wlany, indice) {
+  int n = wlany.size(); double soma;
+  double raio = square(85); indices(0);
+  for(int i = 0; i < n; i++) {
+    soma = enquadra(wlanx[i] - x) + square(wlany[i] - y);
+    if( soma <= raio) {
+      indices.push_back(indice[i]);}}
+  return indices;
+}
+  
+// Função para inspecionar espaços de busca discretos  
+List rastreia(int intervalo_x, int intervalo_y, DoubleVector wlanx,
+              DoubleVector wlany, DoubleVector centro_x, DoubleVector centro_y,
+              NumericVector indice, int mais_populoso, std::vector<int> viola) {
+  std::vector<double> cobertura(0);
+  List ret;
+  int intervalos = intervalo_x * intervalo_y; 
+  for (int j = 2; j <= intervalos; j++) {
+    if( (conta_pontos(centro_x[j],centro_y[j],
+                      wlanx, wlany, indice).size() >= 
+         conta_pontos(centro_x[mais_populoso], centro_y[mais_populoso],
+                      wlanx, wlany, indice).size() ) &&
+        (! std::count(viola.begin(), viola.end(), mais_populoso) ) ){
+      mais_populoso = j;
+      cobertura = conta_pontos(centro_x[mais_populoso],
+                               centro_y[mais_populoso],wlanx,wlany,indice);}
+    ret["cobertura"] = cobertura;
+    ret["mais_populoso"] = mais_populoso;}
+  return ret;}
+}
+  
+```
+
+* A inspeção das matrizes de busca de espaços discretos quadrados e não quadrados entre $\boldsymbol M_{\boldsymbol ( \boldsymbol 8 \boldsymbol , \boldsymbol 8)}$ e $\boldsymbol M_{ \boldsymbol ( \boldsymbol 1 \boldsymbol 5 \boldsymbol 0 \boldsymbol , \boldsymbol 1 \boldsymbol 5 \boldsymbol 0 \boldsymbol )}$, bem como a contagem de pontos de demanda dentro do raio de cobertura de um ponto de acesso foram prototipadas com o modulo rastreador no ambiente __C++__. Esse modulo contêm as seguintes funções:
+  + __enquadra__ eleva um número ao quadrado.
+  + __conta_pontos__ conta o número de pontos dentro do raio de cobertura de um ponto de acesso.
+  + __rastreia__ inspeciona as melhores coordenadas para cada ponto de acesso dado um espaço discreto.
+
+  
+
+### Prototipagem dos Espaços de Busca em R
+
+```{r eval = F}
+# Declara objetos e carrega modulo rastreador.cpp 
+wlan_completa <- read_csv("clientes.csv", col_names = c("x", "y", "Mbps"))
+wlan_id <- wlan_completa %>% mutate(indice = 1:nrow(wlan_completa))
+performance <- tibble(intervalos = 8:50, PA = rep(0,143), tempo = rep(0,143))
+sourceCpp('rastreador.cpp')
+
+# Laços para combinação de espaços discretos
+for(intervalo_x in seq(8, 150, by = 1)){
+  for(intervalo_y in seq(8, 150, by = 1)){
+    centro_x <- rep(seq(0, 800, length.out = intervalo_x), each = intervalo_y)  
+    centro_y <- rep(seq(0, 800, length.out = intervalo_y), times = intervalo_x)
+    wlan <- wlan_id; vencedores <- NULL; contador <- 0; Mbps <- NULL; viola <- numeric(1)
+    inicio <- Sys.time()
+    while(contador < 475){
+      cobertura <- NULL; mais_populoso <- 1
+      rastreado <- rastrreia(intervalo_x = intervalo_x, intervalo_y = intervalo_y,
+                             wlanx = wlan$x, wlany = wlan$y,
+                             centro_x = centro_x, centro_y = centro_y,
+                             indice = wlan$indice, mais_populoso = mais_populoso,
+                             viola = viola) 
+      megas <- wlan %>% 
+        filter(indice %in% as.integer(rastreado[[1]])) %>%
+        summarise(total = sum(consumo)) %>%
+        pull(total)
+      if(megas < 150){
+        Mbps <- c( Mbps, megas)
+        vencedores <- c(vencedores, rastreado[[2]])
+        wlan <- wlan %>% filter(!indice %in% as.integer(rastreado[[1]]) )
+        contador <- contador + length(rastreado[[1]])
+        print(paste0("Indice: ", intervalo_x, " - ", intervalo_y, " - ",
+                     "Contador: ", contador))} else { viola <- c(viola, rastreado[[2]])}}
+    fim <- Sys.time()
+    performance$tempo[indice_perfor] <- fim - inicio
+    performance$PA[indice_perfor] <- length(vencedores)
+    indice_perfor <- indice_perfor + 1}}
+}
+```
+
+*  Para leitura dos dados e laço para combinação de espaços foram utilizadas as facilidades do ambiente __R__ em operar com data frames e gerar vetores de sequências. 
+
+* A função __rastreia__ foi utilizada no ambiente __R__ por meio do pacote __Rcpp__ que carrega o modulo __rastreador.cpp__ e constrói a conexão entre os dois ambientes.
+
+
+## Convergência
+
+*  O algoritmo completo utilizado para convergência considerou as combinações de espaços de busca de $\boldsymbol M_{\boldsymbol ( \boldsymbol 8, \boldsymbol 8 \boldsymbol ) }$ até $\boldsymbol M_{ \boldsymbol ( \boldsymbol 1 \boldsymbol 5 \boldsymbol 0 \boldsymbol , \boldsymbol 1 \boldsymbol 5 \boldsymbol 0 \boldsymbol )}$ contabilizando o mínimo de __64__ o máximo de __22500__ coordenadas para possíveis localizações dos pontos de acesso.
+
+*  O mapa de superfície tridimensional foi construído para ilustrar as regiões de inspeção do algoritmo. O gradiente das cores __azul(máximo)__ e __vermelho(mínimo)__ foi utilizado como a terceira dimensão do gráfico para ilustrar o número de pontos de acesso necessários para atingir um mínimo local ou global em cada combinação de espaços discretos.
+
+
+```{r fig.align='center', echo = FALSE, out.width="100%"}
+
+# Le imagem
+img <- readPNG("../imagens/mapa_superficie_pas.png")
+
+# Imprime imagem
+grid.raster(img)
+
+```
+
+
+
+*  O ponto na coordenada __i = 8__ do eixo $\boldsymbol M_{ \boldsymbol ( \boldsymbol i \boldsymbol )}$ e __j = 8__ do eixo $\boldsymbol M_{ \boldsymbol ( \boldsymbol j \boldsymbol )}$, corresponde a inspeção do espaço de busca $\boldsymbol M_{ \boldsymbol ( \boldsymbol 8 \boldsymbol , \boldsymbol 8)}$ que atinge a pior solução ótima de mínimo local gastando __20 Pa's__.
+
+*  Entre $\boldsymbol M_{ \boldsymbol ( \boldsymbol 8 \boldsymbol , \boldsymbol 8 \boldsymbol )}$ e $\boldsymbol M_{ \boldsymbol ( \boldsymbol 3 \boldsymbol 0 \boldsymbol , \boldsymbol 3 \boldsymbol 0 \boldsymbol )}$ o algoritmo passa pelos mínimos locais de __20__ até __13 Pa's__, em $\boldsymbol M_{\boldsymbol ( \boldsymbol 2 \boldsymbol 7 \boldsymbol , \boldsymbol 4 \boldsymbol 3 \boldsymbol )}$ atinge pela primeira vez o mínimo global de __12 Pa's__ e em $\boldsymbol M_{ \boldsymbol ( \boldsymbol 9 \boldsymbol 0 \boldsymbol , \boldsymbol 7 \boldsymbol 5 \boldsymbol )}$ o algoritmo começa a estabilizar em __12 Pa's__ com a maioria dos espaços convergindo para __12 Pa's__. 
+
+*  O algoritmo estabiliza em __12 Pa´s__ para espaços discretos mais granulares que $\boldsymbol M_{ \boldsymbol ( \boldsymbol 1 \boldsymbol 1 \boldsymbol 0 \boldsymbol , \boldsymbol 1 \boldsymbol 1 \boldsymbol 0 \boldsymbol )}$. Tal fato indicou convergência porque até $\boldsymbol M_{ \boldsymbol ( \boldsymbol 1 \boldsymbol 5 \boldsymbol 0 \boldsymbol , \boldsymbol 1 \boldsymbol 5 \boldsymbol 0 \boldsymbol )}$ o número de __Pa's__ permanece em __12__.
+
+## Custo Computacional
+
+*  As performances de custo computacional do algoritmo nas combinações de espaços de busca foram comparadas utilizando a função __Sys.time__ do __R__. O hardware utilizado foi um processador __Intel i7__ com __16 GB RAM__.
+
+*  O mapa de superfície tridimensional foi construído para ilustrar os tempos computacionais necessários para atingir um mínimo local ou global em cada combinação de espaços discretos.
+
+```{r fig.align='center', echo = FALSE, out.width="100%"}
+
+# Le imagem
+img <- readPNG("../imagens/custo_computacional.png")
+
+# Imprime imagem
+grid.raster(img)
+
+```
+
+
+*  O ponto na coordenada __i = 8__ do eixo $\boldsymbol M_{\boldsymbol ( \boldsymbol i \boldsymbol )}$ e __j = 8__ do eixo $\boldsymbol M_{ \boldsymbol ( \boldsymbol j \boldsymbol )}$, corresponde a inspeção do espaço de busca $\boldsymbol M_{ \boldsymbol ( \boldsymbol 8 \boldsymbol , \boldsymbol 8 \boldsymbol )}$ que atinge a pior solução ótima de mínimo local com custo computacional de __0.02 segundos__.
+
+*  É possível observar __9__ intervalos bem distintos com alguns poucos pontos discrepantes dentro de cada curva de nível. Pode-se verificar que a curva vai se tornando mais __linear__ a medida que se aproxima dos maiores tempos. Os custos variaram entre __0.02__ e __0.48 segundos__.
+
+*  O custo computacional total gasto para inspecionar todos os espaços discretos foi de aproximadamente de __41 minutos__.
+
+## Mínimo Global 
+
+*  A solução ótima de mínimo global considerou o espaço de busca $\boldsymbol M_{ \boldsymbol ( \boldsymbol 1 \boldsymbol 1 \boldsymbol 0 \boldsymbol , \boldsymbol 1 \boldsymbol 1 \boldsymbol 0 \boldsymbol )}$ totalizando __12100__ coordenadas de possíveis localizações para os pontos de acesso. Essa solução foi escolhida porque é um ponto de transição da convergência para estabilização do mínimo global.
+
+*  O algoritmo inspecionou o espaço de busca de __12100__ possíveis localizações para os pontos de acesso e recuperou as localizações de __12__ coordenadas que minimizam o número de pontos de acesso e satisfazem as condições do problema.
+
+```{r fig.align='center', echo = FALSE, out.width="100%"}
+
+# Le imagem
+img <- readPNG("../imagens/solucao_110x110.png")
+
+# Imprime imagem
+grid.raster(img)
+
+```
+
+
+
+*  O algoritmo gastou __0.35 segundos__ para atingir o mínimo local de __12 Pa's__. É possível observar que ocorre somente uma sobreposição de áreas de cobertura dos pontos de acesso no quadrante superior direito do gráfico.
+
+*  Os __2 Pa's__ posicionados nas coordenadas __(192, 199)__ e __(609, 587)__ estão cobrindo um grande número de __Pd's__ podendo apresentar consumos de banda próximos da saturação.
+
+## Tabela de Resultados
+
+*  Tabela de localização dos __12 Pa's__ na área de __800 x 800__ com os respectivos consumos totais em __Mbps__:
+
+```{r warning=F, message=F, error=F, echo=F}
+
+# Declara data frame de Pontos otimos e consumo
+otimo <- tibble(Pa = 1:12,
+                x = c(192, 609, 177, 683, 485, 404, 697, 602, 96, 448, 727, 375),
+                y = c(199, 587, 565, 368, 477, 243, 683, 184, 712, 67, 8, 653),
+                `Consumo (Mbps)` = c(147.2, 148.1, 6.9, 6.7, 5.7, 5.8, 5.4, 6.6, 4.2, 3.7, 4.6, 2.1))
+
+# Tabela de pontos otimos
+kable(otimo)
+
+```
+
+*  É possível observar que os dois clusters principais com um total de __147__ e __148__ Mbps de consumo estão muito próximos da saturação e talvez fosse adequado a colocação de mais __2 Pa's__ nessas regiões para garantir a integridade da entrega do sinal onde há maior concentração de __pontos de demanda__.
+
+*  Outra possível consideração seria a de que a diminuição da cobertura de cada __Pa__ de __95%__ ou __475 Pd's__ para __90%__ ou __450 Pd's__ reduziria o custo total de __Pa's__ em __33%__ ou seja de __12__ para __8 Pa's__.
+
+## Otimizador em Produção
+
+* Para atender a demanda da unidade de decisão a nivel de produção foi desenvolvido o aplicativo __Posicionador__.
+
+* Este __programa iterativo__ é composto de uma barra lateral para carregar um arquivo __.csv__ com 3 colunas. A primeira e a segunda são referentes às coordenadas __(x,y)__ dos pontos de demanda e a terceira ao consumo de banda de cada ponto de demanda em __Mbps__. O painel é composto de um gráfico que mostra o posicionamento dos __Pa's__ e uma tabela que mostra a localização exata de cada __Pa__, bem como a largura de banda que será demandada. 
+
+* Esta ferramenta irá permitir que a __unidade de decisão__ analise os cenários em tempo real otimizando o __tempo humano__ gasto pela unidade de decisão para escolher o __melhor cenário__. Outra vantagem é que a unidade decisão poderá fazer __ajustes finos__ no otimizador ao invés de escolher entre opções pré-configuradas.
+
+
+```{r fig.align='right', fig.width=10, fig.hight=12, echo = FALSE}
+
+# Le imagem
+img <- readPNG("../imagens/posicionador_app.png")
+
+# Imprime imagem
+grid.raster(img)
+
+```
+  
+
+## Referências
+
+* [\textcolor{blue}{Projeto WLAN github}](https://github.com/Protospi/WLAN)
+
+
+
+

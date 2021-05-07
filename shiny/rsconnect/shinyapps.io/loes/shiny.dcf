@@ -1,0 +1,13 @@
+name: shiny
+title: shiny
+username:
+account: loes
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 3646931
+bundleId: 4283228
+url: https://loes.shinyapps.io/shiny/
+when: 1614555363.07512
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: teste_csv_1000x1000_600.csv|teste_csv_400x400_200.csv

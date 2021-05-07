@@ -1,0 +1,376 @@
+---
+title: "Como funciona o Algoritmo"
+author: "Pedro Loes"
+date: "02/02/2021"
+output: ioslides_presentation
+---
+
+##  Problema
+
+* Descrição:
+  * Função:
+    * Minimizar o número de pontos de acesso (Pa's) na área de 800 x 800 metros que atendam à demanda de 475 clientes (Pd's).
+  * Restrições:
+    * O alcance de cada Pa é um círculo com raio de 85 metros.
+    * O número de Pa's não deve ultrapassar 100.
+    * A soma da demanda dos Pd's cobertos por um dado Pa não deve ultrapassar 150 Mbps.
+    
+
+## Espaço de busca
+
+* Escala:
+  * Continua:
+    * Existem infinitas coordenadas de possíveis localizações para os Pa's tornando o problema computacionalmente insolúvel. 
+  
+  * Discreta:
+    * Considerando a área de 800 x 800 metros discretizada em inteiros, existem 640.000 possíveis localizações para os Pa's tornando o problema computacionalmente solúvel.
+
+ 
+## Desenho do Algoritmo 
+ 
+* Testes dos Espaços:
+  * Espaços discretos menores que 8 x 8 não apresentaram solução ótima.
+  * Espaços maiores que 150 x 150 apresentaram custo computacional muito elevado.
+   
+* Implementação:    
+  * O algorítimo foi desenhado para escanear os espaços discretos de 8 x 8 até 150 x 150 na área de 800 x 800 com intervalos iguais entre os pontos.
+  * Para ilustrar, foi considerado o espaço de 9 x 9, que representa 81 possíveis localizações para os Pa's.
+
+##
+
+```{r,  warning=F, echo = F, message=F, error=F, fig.align="center", fig.width=7, fig.height=6}
+
+# Carrega Bibliotecas
+library(tidyverse)
+library(plotly)
+
+# Declara possíveis posições para os pontos de acesso
+centro_x <- rep(c(0,100,200,300,400,500,600,700,800), times = 9)  
+centro_y <- rep(c(0,100,200,300,400,500,600,700,800), each = 9) 
+
+# Declara data frame do grid
+grid_9_9 <- tibble(x = centro_x,
+                   y = centro_y)
+
+# gráfico das posições
+plot_ly(data = grid_9_9,
+       x = ~x,
+       y = ~y) %>% 
+  add_markers(size = 3,
+              color = "red",
+  ) %>% 
+  layout(title = list(text = 'Espaço Discretizado 9 x 9')) %>% 
+  config(displayModeBar = F)
+
+
+
+```
+
+
+## Interações do Algoritmo 
+
+* Laço:
+  * A cada iteração o algoritmo inspeciona cada coordenada do espaço discretizado de possíveis localizações dos Pa's e determina o PA que cobre o maior número de Pd's. 
+  * Se a condição de 150 Mbps não for violada, o índice do PA com maior cobertura de Pd's é armazenado e esses Pd's são removidos.
+  * O algoritmo reinicia a busca do próximo PA que cobre mais Pd's dentre os restantes.
+
+* Critério de Parada:
+  * O algoritmo para quando cobre pelo menos 475 dos 500 Pd's atendendo as restrições de consumo de banda e limite de Pa's.
+
+
+## Primeira Iteração
+
+* O algoritmo conta o número de Pd's cobertos por cada uma das 81 possíveis localizações para o 1º PA e soma os Mbps demandados.
+
+* O máximo de 202 Pd's são cobertos pelo PA nas coordenadas (200, 200).
+
+* O total de 146 Mbps de demanda desses Pd's não viola a condição de menor que 150 Mbps.  
+
+* As coordenadas deste 1º PA são armazenadas.
+
+* Os 202 Pd's cobertos por este PA são removidos por já estarem cobertos.
+
+##
+
+```{r, warning=F, echo = F, message=F, error=F, fig.align="center", fig.width=7, fig.height=6}
+
+# Importa dados
+wlan_completa <- read_csv("https://raw.githubusercontent.com/Protospi/WLAN/main/dados/clientes.csv",
+                          col_names = c("x", "y", "Mbps"))
+
+# Insere colunas de indice
+wlan1 <- wlan_completa %>%
+  mutate(indice = 1:nrow(wlan_completa))
+
+# Declara vetor que armazena resultasdos
+contagem1 <- tibble(Contagem = numeric(81),
+                    Mbps = numeric(81))
+
+# Declara Limite 
+limite <- 85^2
+
+# Laco para determinar maior contagem
+for(i in 1:81){
+  
+  # Declara total
+  total1 = 0
+  
+  # Declara total de Mbps1
+  Mbps1 <- 0
+  
+  # Laco para pontos
+  for(j in 1:500){
+    
+    # Calcula soma da diferenca de quadrados
+    dist1 <-  (wlan1$x[j] - centro_x[i])^2 + (wlan1$y[j] - centro_y[i])^2 
+    
+    # Condicao de pertenciamento ai raio da wlan
+    if(dist1 <= limite){
+      
+      # Incrementa total de Pd's
+      total1 <- total1 + 1
+      
+      # Incrementa total de Mbps
+      Mbps1 <- Mbps1 + wlan1$Mbps[j]
+      
+    }
+    
+  }
+  
+  # Popula total de Pd's atendidos pelo Pa i 
+  contagem1[i, "Contagem"] <- total1
+  
+  # Popula total de Pd's atendidos pelo Pa i
+  contagem1[i, "Mbps"] <- Mbps1
+  
+}
+
+# Carrega dados
+wlan1 <- tibble(Pa = rep(1,500)) %>%
+  bind_cols(read_csv("https://raw.githubusercontent.com/Protospi/WLAN/main/dados/clientes.csv",
+                     col_names = c("x", "y", "consumo")))
+
+# primeiro grid
+grid1 <- tibble(Pa = 2:82,
+                x = rep(c(0,100,200,300,400,500,600,700,800), times = 9),
+                y = rep(c(0,100,200,300,400,500,600,700,800), each = 9),
+                consumo = rep(100, 81),
+                Pd = contagem1$Contagem,
+                Mbps = round(contagem1$Mbps, 1))
+
+# Declara Grafico
+base1 <- wlan1 %>%
+  plot_ly(x = ~x, 
+          y = ~y,
+          size = ~consumo,
+          type = "scatter",
+          alpha = 0.8,
+          name = "Pontos de Demanda") %>% 
+  add_markers(
+    showlegend = F,
+    alpha = 0.3,
+    alpha_stroke = 0.3,
+    marker=list(color = 'rgb(0,191,255)'),
+    name = "Pontos de Demanda",
+  ) %>%
+  add_markers(frame = ~paste0(sprintf("%02d", Pa-1), " = ", Pd, " Pd's = ", Mbps, " Mbps"),
+              marker=list(sizeref=0.035,
+                          sizemode="area",
+                          color = 'rgb(255,140,0)'),
+              alpha= 0.01,
+              data = grid1,
+              name = "Pontos de Acesso") %>%
+  animation_opts(500,  transition = 1, easing = "exp-out") %>% 
+  animation_slider(
+    currentvalue = list(prefix = "Pa: ",
+                        font = list(color="orange"),
+                        xanchor = "center")
+  ) %>% 
+  layout(legend = list(x = 100, y = 0.5),
+         title = list(text = 'Primeira Iteração'),
+         xaxis= list(title = list(text = "x",
+                                  standoff = 10L))) %>% 
+  config(displayModeBar = F)
+
+# Desenha Grafico
+base1
+
+```
+
+
+## Segunda Iteração
+
+* O algoritmo realiza a mesma busca e contagem da primeira iteração, porém desconsiderando os Pd's cobertos pelo 1º PA.
+
+* O máximo de 199 Pd's são cobertos pelo PA nas coordenadas (600, 600).
+
+* O total de 141 Mbps de demanda destes Pd's não viola a condição de menor que 150 Mbps. 
+
+* Da mesma forma são armazenadas as coordenadas desse 2º PA. 
+
+* Os 199 Pd's cobertos por este PA também são removidos por já estarem cobertos.
+
+## 
+
+```{r, warning=F, echo = F, message=F, error=F, fig.align="center", fig.width=7, fig.height=6}
+
+# Importa dados
+wlan_completa <- read_csv("https://raw.githubusercontent.com/Protospi/WLAN/main/dados/clientes.csv",
+                          col_names = c("x", "y", "Mbps"))
+
+# Insere colunas de indice
+wlan1 <- wlan_completa %>%
+  mutate(indice = 1:nrow(wlan_completa))
+
+
+# Recupera indices
+indices1 <- NULL
+
+# Laco para pontos
+for(j in 1:500){
+  
+  # Calcula soma da diferenca de quadrados
+  dist1 <- (wlan1$x[j] - centro_x[21])^2 + (wlan1$y[j] - centro_y[21])^2 
+  
+  # Condicao de pertenciamento ai raio da wlan
+  if(dist1 <= limite){
+    
+    # Incrementa total de Pd's
+    indices1 <- c(indices1, j)
+    
+  }
+  
+}
+
+# Carrega dados depois da primeira remocao
+wlan2 <- wlan1[-indices1,]
+
+# Declara vetor que armazena resultasdos
+contagem2 <- tibble(Contagem = numeric(81),
+                    Mbps = numeric(81))
+
+# Laco para determinar maior contagem
+for(i in 1:81){
+  
+  # Declara total
+  total2 <- 0
+  
+  # Declara total de Mbps1
+  Mbps2 <- 0
+  
+  # Laco para pontos
+  for(j in 1:nrow(wlan2)){
+    
+    # Calcula soma da diferenca de quadrados
+    dist2 <-  (wlan2$x[j] - centro_x[i])^2 + (wlan2$y[j] - centro_y[i])^2 
+    
+    # Condicao de pertenciamento ai raio da wlan
+    if(dist2 <= limite){
+      
+      # Incrementa total de Pd's
+      total2 <- total2 + 1
+      
+      # Incrementa total de Mbps
+      Mbps2 <- Mbps2 + wlan2$Mbps[j]
+      
+    }
+    
+  }
+  
+  # Popula total de Pd's atendidos pelo Pa i 
+  contagem2[i, "Contagem"] <- total2
+  
+  # Popula total de Pd's atendidos pelo Pa i
+  contagem2[i, "Mbps"] <- Mbps2
+  
+}
+
+# primeiro grid
+grid2 <- tibble(Pa = 2:82,
+                x = rep(c(0,100,200,300,400,500,600,700,800), times = 9),
+                y = rep(c(0,100,200,300,400,500,600,700,800), each = 9),
+                consumo = rep(100, 81),
+                Pd = contagem2$Contagem,
+                Mbps = round(contagem2$Mbps, 1))
+
+# Carrega dados
+wlan1 <- tibble(Pa = rep(1,500)) %>%
+  bind_cols(read_csv("https://raw.githubusercontent.com/Protospi/WLAN/main/dados/clientes.csv",
+                     col_names = c("x", "y", "consumo")))
+
+# Carrega dados depois da primeira remocao
+wlan2 <- wlan1[-indices1,]
+
+
+# Declara Grafico
+base2 <- wlan2 %>%
+  plot_ly(x = ~x, 
+          y = ~y,
+          size = ~consumo,
+          type = "scatter",
+          alpha = 0.8,
+          name = "Pontos de Demanda") %>% 
+  add_markers(
+    showlegend = F,
+    alpha = 0.3,
+    alpha_stroke = 0.3,
+    marker=list(color = 'rgb(0,191,255)'),
+    name = "Pontos de Demanda",
+  ) %>%
+  add_markers(frame = ~paste0(sprintf("%02d", Pa-1), " = ", Pd, " Pd's = ", Mbps, " Mbps"),
+              marker=list(sizeref=0.035,
+                          sizemode="area",
+                          color = 'rgb(255,140,0)'),
+              alpha= 0.01,
+              data = grid2,
+              name = "Pontos de Acesso") %>%
+  animation_opts(500,  transition = 1, easing = "exp-out") %>% 
+  animation_slider(
+    currentvalue = list(prefix = "Pa: ",
+                        font = list(color="orange"),
+                        xanchor = "center")
+  ) %>% 
+  layout(legend = list(x = 100, y = 0.5),
+         title = list(text = 'Segunda Iteração'),
+         xaxis= list(title = list(text = "x",
+                                  standoff = 10L))) %>% 
+  config(displayModeBar = F)
+
+# Desenha grafico
+base2
+
+
+```
+
+
+## Decima Sétima Iteração
+
+* O algoritmo para. 
+
+* O resultado da busca retorna uma solução no mínimo local de 17 PA´s.
+
+* A condição de que 95% ou 475 do total de 500 pontos sejam cobertos é atendida.
+
+* A restrição de número de Pa's menor que 100 é atendida.
+
+* A restrição de que a soma da demanda dos Pd's cobertos por um Pa não exceda 150 Mbps é atendida.
+
+* As informações dos índices, número de Pd's atendidos e total da demanda em Mbps de cada Pa podem ser recuperados.
+
+
+## 
+
+![](https://raw.githubusercontent.com/Protospi/WLAN/main/imagens/solucao_9x9.png){width=600, hight=500}
+
+
+## Conclusões:
+
+* O algoritmo encontra mínimos locais entre 20 e 13 Pa's em espaços discretos com intervalo entre 8 x 8 até 54 x 54.
+
+* O algoritmo oscila entre 12 e 13 Pa's em espaços discretos no intervalo entre 55 x 55 até 114 x 114. 
+
+* O algoritmo converge para o mínimo global de 12 Pa's em espaços mais granulares que 115 x 115.
+
+
+
+
