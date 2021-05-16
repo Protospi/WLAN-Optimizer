@@ -10,7 +10,7 @@
 
 ## Apresentação de Slides 
 
-[Rpubs](https://rpubs.com/Drope/wlan)
+[Rpubs](https://rpubs.com/Drope/767230)
 
 ## Aplicativo Posicionador
 
