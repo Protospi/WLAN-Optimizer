@@ -8,12 +8,8 @@ output: pdf_document
 
 ## Resumo
 
-* _Este artigo apresenta uma solução para um problema aplicado do curso de _Teoria da Decisão_ do departamento de __Engenharia de Sistemas__ da __UFMG__ ministrado pelo professor _Lucas Batista_. O objetivo deste trabalho foi aplicar as técnicas de __otimização__ e __teoria da decisão__ lecionadas ao longo do semestre. O desenvolvimento compreende a exploração de __mínimos locais__ e __mínimos globais__. A conclusão visou __otimizar__ o número de __pontos de acesso__ para suprir os __consumos de banda__ demandados pelos clientes de uma conferência, atendendo à __restrições pré-estabelecidas__. Finalmente na etapa __otimizador em produção__ foi criado um aplicativo para generalizar o uso do algoritimo_.
+* _Este artigo apresenta uma solução para um problema aplicado do curso de _Teoria da Decisão_ do departamento de __Engenharia de Sistemas__ da __UFMG__ ministrado pelo professor _Lucas Batista_. O objetivo deste trabalho foi aplicar as técnicas de __otimização__ e __teoria da decisão__ lecionadas ao longo do semestre. O problema consiste em otimizar o posicionamento de Pontos de Acesso para atender a demanda de internet dos clientes de uma conferência. As etapas de __Análise Exploratória__, __Modelagem__, __Espaços de Busca__ e __Prototipagem__ consistiram no desenho e na construção do algoritmo em __R__ e __C++__. As etapas de __Convergência__ e __Custo Computacional__ consistiram na exploração do __espaço de soluções__. A etapa __Mínimo Global__ consistiu em __otimizar__ o número de __pontos de acesso__ para suprir os __consumos de banda__ demandados pelos clientes, atendendo às __restrições pré-estabelecidas__. Finalmente na etapa __otimizador em produção__ foi desenvolvido um aplicativo para generalizar o uso do algoritmo em futuras demandas da unidade de decisão permitindo a aplicação da análise em outros bancos de dados por meio de uma interface simples, rápida e intuitiva_.
 
-## Introdução
-
-*  O problema foi modelado no software __R__ com implementação da função objetivo em __C++__ .
-*  Diferentes espaços de busca foram considerados com o intuito de descobrir a partir de qual densidade de espaço de busca __discretizado__ o algoritmo convergiria para a solução de __mínimo global ótima__.
 
 ## Especificações do Problema
 
@@ -100,7 +96,7 @@ kable(head(wlan,10))
 ```{r fig.align='center', echo = FALSE, out.width="100%"}
 
 # Le imagem
-img <- readPNG("../imagens/dispersao.png")
+img <- readPNG("../imagens/dispersao2.png")
 
 # Imprime imagem
 grid.raster(img)
@@ -119,6 +115,9 @@ grid.raster(img)
 *  Se considerada uma escala continua, a área de __800 x 800__ metros possuí infinitas coordenadas de possíveis localizações para os pontos de acesso.
 
 *  A construção de espaços de busca considerou espaços discretizados na forma de matrizes do tipo $\boldsymbol M_{ \boldsymbol ( \boldsymbol i, \boldsymbol j \boldsymbol )}$ com __i = {8, 9, ..., 150}__ e __j = {8, 9, ..., 150}__. A posição __i__ representa a quantidade de posições igualmente espaçadas no eixo __x__ e da mesma forma, a posição __j__ no eixo __y__.
+
+* Link do Funcionamento do Algoritmo Animado com exemplo do espaço de busca discreto de 9 x 9:
+  + [\textcolor{blue}{Funcionamento do Algoritmo}](https://rpubs.com/Drope/algoritmo-animacao)
 
 ```{r fig.align='center', echo = FALSE, out.width="100%"}
 
@@ -202,7 +201,7 @@ List rastreia(int intervalo_x, int intervalo_y, DoubleVector wlanx,
 
   
 
-### Prototipagem dos Espaços de Busca em R
+### Prototipagem da Busca em R
 
 ```{r eval = F}
 # Declara objetos e carrega modulo rastreador.cpp 
@@ -216,15 +215,24 @@ for(intervalo_x in seq(8, 150, by = 1)){
   for(intervalo_y in seq(8, 150, by = 1)){
     centro_x <- rep(seq(0, 800, length.out = intervalo_x), each = intervalo_y)  
     centro_y <- rep(seq(0, 800, length.out = intervalo_y), times = intervalo_x)
-    wlan <- wlan_id; vencedores <- NULL; contador <- 0; Mbps <- NULL; viola <- numeric(1)
+    wlan <- wlan_id
+    vencedores <- NULL
+    contador <- 0
+    Mbps <- NULL
+    viola <- numeric(1)
     inicio <- Sys.time()
     while(contador < 475){
-      cobertura <- NULL; mais_populoso <- 1
-      rastreado <- rastrreia(intervalo_x = intervalo_x, intervalo_y = intervalo_y,
-                             wlanx = wlan$x, wlany = wlan$y,
-                             centro_x = centro_x, centro_y = centro_y,
-                             indice = wlan$indice, mais_populoso = mais_populoso,
-                             viola = viola) 
+      cobertura <- NULL
+      mais_populoso <- 1
+      rastreado <- rastreia(intervalo_x = intervalo_x,
+                            intervalo_y = intervalo_y,
+                            wlanx = wlan$x,
+                            wlany = wlan$y,
+                            centro_x = centro_x,
+                            centro_y = centro_y,
+                            indice = wlan$indice,
+                            mais_populoso = mais_populoso,
+                            viola = viola) 
       megas <- wlan %>% 
         filter(indice %in% as.integer(rastreado[[1]])) %>%
         summarise(total = sum(consumo)) %>%
@@ -343,9 +351,9 @@ kable(otimo)
 
 * Para atender a demanda da unidade de decisão a nivel de produção foi desenvolvido o aplicativo __Posicionador__.
 
-* Este __programa iterativo__ é composto de uma barra lateral para carregar um arquivo __.csv__ com 3 colunas. A primeira e a segunda são referentes às coordenadas __(x,y)__ dos pontos de demanda e a terceira ao consumo de banda de cada ponto de demanda em __Mbps__. O painel é composto de um gráfico que mostra o posicionamento dos __Pa's__ e uma tabela que mostra a localização exata de cada __Pa__, bem como a largura de banda que será demandada. 
+* Este __programa iterativo__ é composto de uma barra lateral para carregar um arquivo __.csv__ com 3 colunas. A primeira e a segunda são referentes às coordenadas __(x,y)__ dos pontos de demanda e a terceira ao consumo de banda de cada ponto de demanda em __Mbps__. O painel é composto de um gráfico que mostra o posicionamento dos __Pa's__ e uma tabela que mostra a localização exata de cada __Pa__, bem como a largura de banda que será demandada. Para que a ferramenta funcione com o banco de dados deste projeto é necessário que o botão Posicione seja acionado.
 
-* Esta ferramenta irá permitir que a __unidade de decisão__ analise os cenários em tempo real otimizando o __tempo humano__ gasto pela unidade de decisão para escolher o __melhor cenário__. Outra vantagem é que a unidade decisão poderá fazer __ajustes finos__ no otimizador ao invés de escolher entre opções pré-configuradas.
+* Esta ferramenta permite que uma __unidade de decisão__ analise os cenários em tempo real otimizando o __tempo humano__ gasto pela unidade de decisão para escolher o __melhor cenário__. Outra vantagem é que a unidade decisão poderá fazer __ajustes finos__ no otimizador ao invés de escolher entre opções pré-configuradas.
 
 
 ```{r fig.align='right', fig.width=10, fig.hight=12, echo = FALSE}
@@ -359,9 +367,8 @@ grid.raster(img)
 ```
   
 
-## Referências
-
-* [\textcolor{blue}{Projeto WLAN github}](https://github.com/Protospi/WLAN)
+* Link do Aplicativo Posicionador: 
+  + [\textcolor{blue}{Aplicativo Shiny Posicionador}](https://loes.shinyapps.io/shiny/)
 
 
 

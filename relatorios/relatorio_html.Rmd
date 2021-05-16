@@ -5,16 +5,6 @@ date: "02/02/2021"
 output: ioslides_presentation
 ---
 
-##  Problema
-
-* Descrição:
-  * Função:
-    * Minimizar o número de pontos de acesso (Pa's) na área de 800 x 800 metros que atendam à demanda de 475 clientes (Pd's).
-  * Restrições:
-    * O alcance de cada Pa é um círculo com raio de 85 metros.
-    * O número de Pa's não deve ultrapassar 100.
-    * A soma da demanda dos Pd's cobertos por um dado Pa não deve ultrapassar 150 Mbps.
-    
 
 ## Espaço de busca
 
@@ -30,7 +20,7 @@ output: ioslides_presentation
  
 * Testes dos Espaços:
   * Espaços discretos menores que 8 x 8 não apresentaram solução ótima.
-  * Espaços maiores que 150 x 150 apresentaram custo computacional muito elevado.
+  * Espaços maiores que 150 x 150 apresentaram convergência estável e aumento do custo computacional.
    
 * Implementação:    
   * O algorítimo foi desenhado para escanear os espaços discretos de 8 x 8 até 150 x 150 na área de 800 x 800 com intervalos iguais entre os pontos.
@@ -351,8 +341,6 @@ base2
 
 * A condição de que 95% ou 475 do total de 500 pontos sejam cobertos é atendida.
 
-* A restrição de número de Pa's menor que 100 é atendida.
-
 * A restrição de que a soma da demanda dos Pd's cobertos por um Pa não exceda 150 Mbps é atendida.
 
 * As informações dos índices, número de Pd's atendidos e total da demanda em Mbps de cada Pa podem ser recuperados.
@@ -364,6 +352,8 @@ base2
 
 
 ## Conclusões:
+
+* O algoritmo foi aplicado em todas as cobinações de espaços discretos entre 8 x 8 até 150 x 150.
 
 * O algoritmo encontra mínimos locais entre 20 e 13 Pa's em espaços discretos com intervalo entre 8 x 8 até 54 x 54.
 
